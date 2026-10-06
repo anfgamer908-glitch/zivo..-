@@ -2,9 +2,6 @@ name: Build ZIVO APK
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   build:
@@ -14,72 +11,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Gradle
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
 
-      - name: Prepare Android project
-        shell: bash
+      - name: Build ZIVO APK
         run: |
-          set -e
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew assembleDebug
+          else
+            gradle assembleDebug
+          fi
 
-          mkdir -p app/src/main/assets
-          mkdir -p app/src/main/java/com/zivo/tournament
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/drawable
+      - name: Find APK
+        run: |
+          mkdir -p dist
+          APK=$(find . -type f -name "*.apk" | head -n 1)
 
-          cp index.html app/src/main/assets/index.html
-          cp MainActivity.java app/src/main/java/com/zivo/tournament/MainActivity.java
-          cp AndroidManifest.xml app/src/main/AndroidManifest.xml
-          cp styles.xml app/src/main/res/values/styles.xml
-          cp zivo_icon.png app/src/main/res/drawable/zivo_icon.png
+          if [ -z "$APK" ]; then
+            echo "❌ APK भेटिएन"
+            exit 1
+          fi
 
-          cat > settings.gradle <<'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
+          echo "✅ APK भेटियो: $APK"
+          cp "$APK" dist/ZIVO.apk
 
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.name = "ZIVO"
-          include(":app")
-          EOF
-
-          cat > build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application' version '8.7.3' apply false
-          }
-          EOF
-
-          cat > app/build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application'
-          }
-
-          android {
-              namespace 'com.zivo.tournament'
-              compileSdk 35
-
-              defaultConfig {
-                  applicationId 'com.zivo.tournament'
-                  minSdk 23
-                  targetSdk 35
-                  versionCode 1
-                  versionName '1.0
+      - name: Upload ZIVO APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZIVO-APK
+          path: dist/ZIVO.apk
+          if-no-files-found: error
